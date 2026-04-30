@@ -1,0 +1,29 @@
+SpacemiT mlink Gateway (Python)
+Copyright 2026 SpacemiT (Hangzhou) Technology Co. Ltd.
+
+This product includes software developed at
+SpacemiT (Hangzhou) Technology Co. Ltd. (https://www.spacemit.com/).
+
+---------------------------------------------------------------------------
+Third-party Software Notices:
+---------------------------------------------------------------------------
+
+Runtime dependencies declared for this component include the following
+third-party packages (see pyproject.toml). Transitive dependencies are also
+present when installed; refer to the license metadata of each installed
+distribution (e.g. site-packages) for full third-party notices.
+
+1. mcp (Model Context Protocol — Python SDK)
+   https://github.com/modelcontextprotocol/python-sdk
+   Licensed under the Apache License, Version 2.0.
+
+2. loguru
+   https://github.com/Delgan/loguru
+   Copyright (c) 2017 The loguru authors
+   Licensed under the MIT License.
+
+3. PyYAML
+   https://pyyaml.org/
+   Copyright (c) 2017-2021 Ingy döt Net; Copyright (c) 2006-2016 Kirill
+   Simonov; see the package for full third-party attributions.
+   Licensed under the MIT License.
