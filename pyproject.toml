@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlink-gateway"
+version = "0.1.0"
+description = "Spacemit mlink MCP gateway (Python side) for S-Robot applications"
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Spacemit Robotics", email = "dev@spacemit.com" },
+]
+dependencies = [
+  "mcp[cli]>=1.11.0,<2",
+  "loguru",
+  "PyYAML",
+]
+
+[project.urls]
+Homepage = "https://github.com/spacemit-robotics/sir"
+
+[project.scripts]
+mlink = "mlink.gateway.cli:main"
+
+[tool.setuptools]
+# This Python project only packages the gateway layer; the C device layer
+# under components/mlink/device is built separately.
+packages = [
+  "mlink.gateway",
+  "mlink.gateway.config",
+  "mlink.gateway.gateway",
+  "mlink.gateway.mcp",
+  "mlink.gateway.protocol",
+  "mlink.gateway.transport",
+  "mlink.gateway.utils",
+]
+
+[tool.setuptools.package-dir]
+"mlink.gateway" = "."
+"mlink.gateway.config" = "config"
+"mlink.gateway.gateway" = "gateway"
+"mlink.gateway.mcp" = "mcp"
+"mlink.gateway.protocol" = "protocol"
+"mlink.gateway.transport" = "transport"
+"mlink.gateway.utils" = "utils"
+
+

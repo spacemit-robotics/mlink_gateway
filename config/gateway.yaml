@@ -1,0 +1,18 @@
+mcp:
+  # MCP server runs over stdio, so no host/port here.
+  name: "mcp-gateway"
+
+devices:
+  # 这里只放一个示例，真正设备的发现依赖 mlink 主动连接到 TCP 端口。
+  # 你可以在这里配置一些默认策略，例如是否允许自动为新的设备生成 ID。
+  auto_device_id_prefix: "device"
+  tcp_listen_host: "0.0.0.0"
+  tcp_listen_port: 8080
+  # Unix 域 socket 监听路径（用于本机 mlink 通过 AF_UNIX 连接）
+  unix_listen_path: "/tmp/mlink.sock"
+  tools_snapshot:
+    enabled: true
+    path: "/tmp/mlink.tools.json"
+    debounce_ms: 500
+
+
