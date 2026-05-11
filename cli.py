@@ -13,6 +13,7 @@ if str(_SCRIPT_DIR) in sys.path:
 
 import argparse  # noqa: E402
 import asyncio  # noqa: E402
+import json  # noqa: E402
 import os  # noqa: E402
 import subprocess  # noqa: E402
 import time  # noqa: E402
@@ -75,10 +76,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_http_args(tools_parser)
     _add_runtime_args(tools_parser, include_log=False)
+    tools_parser.add_argument(
+        "tool_name",
+        nargs="?",
+        default=None,
+        help="Optional full MCP tool name to inspect, for example robot.base_move",
+    )
+    tools_parser.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Only print tool names, matching the old compact output",
+    )
+    tools_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print tool metadata as JSON",
+    )
 
     test_parser = gateway_sub.add_parser("test", help="Test the HTTP MCP endpoint")
     _add_http_args(test_parser)
     _add_runtime_args(test_parser, include_log=False)
+
+    call_parser = gateway_sub.add_parser("call", help="Call a tool through the HTTP MCP endpoint")
+    _add_http_args(call_parser)
+    _add_runtime_args(call_parser, include_log=False)
+    call_parser.add_argument("tool_name", help="Full MCP tool name, for example robot.base_move")
+    call_parser.add_argument(
+        "arguments",
+        nargs="?",
+        default="{}",
+        help='Tool arguments as a JSON object, for example \'{"direction":"forward"}\'',
+    )
 
     return parser
 
@@ -264,14 +292,60 @@ def cmd_gateway_status(args: argparse.Namespace) -> int:
     return 0 if summary["running"] else 1
 
 
-async def _probe_http_gateway(host: str, port: int, path: str) -> tuple[int, list[str]]:
+def _mcp_obj_to_jsonable(value: object) -> object:
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")  # type: ignore[attr-defined]
+    if hasattr(value, "dict"):
+        return value.dict()  # type: ignore[attr-defined]
+    return value
+
+
+def _json_dumps(value: object, *, indent: int | None = None) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=indent, default=str)
+
+
+def _normalize_tool_metadata(value: object) -> dict[str, object]:
+    raw = _mcp_obj_to_jsonable(value)
+    if not isinstance(raw, dict):
+        return {
+            "name": str(raw),
+            "description": "",
+            "inputSchema": {"type": "object", "properties": {}},
+        }
+
+    tool = dict(raw)
+    name = tool.get("name") or tool.get("full_name") or tool.get("fullName") or "<unknown>"
+    description = tool.get("description") or ""
+    input_schema = (
+        tool.get("inputSchema")
+        or tool.get("input_schema")
+        or tool.get("parameters")
+        or {"type": "object", "properties": {}}
+    )
+
+    tool["name"] = name
+    tool["description"] = description
+    tool["inputSchema"] = input_schema
+    return tool
+
+
+async def _probe_http_gateway(host: str, port: int, path: str) -> tuple[int, list[dict]]:
     url = f"http://{host}:{port}{path}"
     async with streamable_http_client(url) as (read_stream, write_stream, _):
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
             tools = await session.list_tools()
-            tool_names = [tool.name for tool in tools.tools]
-            return len(tool_names), tool_names
+            tool_items = [_normalize_tool_metadata(tool) for tool in tools.tools]
+            tool_items.sort(key=lambda item: str(item.get("name", "")))
+            return len(tool_items), tool_items
+
+
+async def _call_http_gateway(host: str, port: int, path: str, tool_name: str, arguments: dict) -> object:
+    url = f"http://{host}:{port}{path}"
+    async with streamable_http_client(url) as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            return await session.call_tool(tool_name, arguments)
 
 
 def _resolve_probe_target(args: argparse.Namespace) -> tuple[str, int, str]:
@@ -282,35 +356,74 @@ def _resolve_probe_target(args: argparse.Namespace) -> tuple[str, int, str]:
 def cmd_gateway_list_tools(args: argparse.Namespace) -> int:
     host, port, path = _resolve_probe_target(args)
     try:
-        tool_count, tool_names = asyncio.run(
+        discovered_count, tool_items = asyncio.run(
             _probe_http_gateway(host, port, path)
         )
     except Exception as exc:
         print(f"mlink gateway tools failed: {exc}")
         return 1
 
+    if args.tool_name:
+        selected_tools = [
+            tool for tool in tool_items
+            if str(tool.get("name", "")) == args.tool_name
+        ]
+    else:
+        selected_tools = tool_items
+
+    if args.json:
+        payload = {
+            "endpoint": f"http://{host}:{port}{path}",
+            "discovered_tool_count": discovered_count,
+            "tool_count": len(selected_tools),
+            "tools": selected_tools,
+        }
+        if args.tool_name:
+            payload["queried_tool"] = args.tool_name
+        print(_json_dumps(payload, indent=2))
+        return 0 if selected_tools or not args.tool_name else 1
+
     print(f"HTTP MCP endpoint reachable: http://{host}:{port}{path}")
-    print(f"Tools discovered: {tool_count}")
-    if not tool_names:
+    print(f"Tools discovered: {discovered_count}")
+    if not tool_items:
         print("No tools registered yet.")
         return 0
 
-    print("Tool names:")
-    for name in tool_names:
-        print(f"  - {name}")
+    if args.tool_name and not selected_tools:
+        print(f"Tool not found: {args.tool_name}")
+        print("Use `mlink gateway tools --names-only` to list available tool names.")
+        return 1
+
+    if args.names_only:
+        print("Tool names:")
+        for tool in selected_tools:
+            print(f"  - {tool.get('name', '<unknown>')}")
+        return 0
+
+    print("Tools:" if not args.tool_name else "Tool:")
+    for tool in selected_tools:
+        name = tool.get("name", "<unknown>")
+        description = tool.get("description") or ""
+        input_schema = tool.get("inputSchema") or {"type": "object", "properties": {}}
+        print(f"- {name}")
+        if description:
+            print(f"  description: {description}")
+        print("  inputSchema:")
+        print(_indent_json(input_schema, prefix="    "))
     return 0
 
 
 def cmd_gateway_test(args: argparse.Namespace) -> int:
     host, port, path = _resolve_probe_target(args)
     try:
-        tool_count, tool_names = asyncio.run(
+        tool_count, tool_items = asyncio.run(
             _probe_http_gateway(host, port, path)
         )
     except Exception as exc:
         print(f"mlink gateway test failed: {exc}")
         return 1
 
+    tool_names = [tool.get("name") for tool in tool_items]
     print(f"HTTP MCP endpoint reachable: http://{host}:{port}{path}")
     print(f"Tools discovered: {tool_count}")
     if "robot.base_move" in tool_names:
@@ -319,6 +432,38 @@ def cmd_gateway_test(args: argparse.Namespace) -> int:
         print("Health: partial (MCP reachable, but robot.base_move not found)")
     else:
         print("Health: partial (MCP reachable, but no tools registered yet)")
+    return 0
+
+
+def _indent_json(value: object, *, prefix: str) -> str:
+    text = _json_dumps(value, indent=2)
+    return "\n".join(prefix + line for line in text.splitlines())
+
+
+def cmd_gateway_call(args: argparse.Namespace) -> int:
+    host, port, path = _resolve_probe_target(args)
+    try:
+        parsed_args = json.loads(args.arguments)
+    except json.JSONDecodeError as exc:
+        print(f"invalid arguments JSON: {exc}")
+        return 1
+
+    if not isinstance(parsed_args, dict):
+        print("invalid arguments JSON: expected an object")
+        return 1
+
+    try:
+        result = asyncio.run(
+            _call_http_gateway(host, port, path, args.tool_name, parsed_args)
+        )
+    except Exception as exc:
+        print(f"mlink gateway call failed: {exc}")
+        return 1
+
+    print(f"HTTP MCP endpoint reachable: http://{host}:{port}{path}")
+    print(f"Tool called: {args.tool_name}")
+    print("Result:")
+    print(_json_dumps(_mcp_obj_to_jsonable(result), indent=2))
     return 0
 
 
@@ -344,8 +489,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_gateway_list_tools(args)
     if args.gateway_command == "test":
         return cmd_gateway_test(args)
+    if args.gateway_command == "call":
+        return cmd_gateway_call(args)
 
-    print("Usage: mlink gateway <run|start|stop|restart|status|tools|test> [options]")
+    print("Usage: mlink gateway <run|start|stop|restart|status|tools|test|call> [options]")
     return 1
 
 
