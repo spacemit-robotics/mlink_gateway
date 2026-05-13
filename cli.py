@@ -80,7 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
         "tool_name",
         nargs="?",
         default=None,
-        help="Optional full MCP tool name to inspect, for example robot.base_move",
+        help="Optional full MCP tool name to inspect, for example robot.move_forward",
     )
     tools_parser.add_argument(
         "--names-only",
@@ -100,12 +100,12 @@ def build_parser() -> argparse.ArgumentParser:
     call_parser = gateway_sub.add_parser("call", help="Call a tool through the HTTP MCP endpoint")
     _add_http_args(call_parser)
     _add_runtime_args(call_parser, include_log=False)
-    call_parser.add_argument("tool_name", help="Full MCP tool name, for example robot.base_move")
+    call_parser.add_argument("tool_name", help="Full MCP tool name, for example robot.move_forward")
     call_parser.add_argument(
         "arguments",
         nargs="?",
         default="{}",
-        help='Tool arguments as a JSON object, for example \'{"direction":"forward"}\'',
+        help="Tool arguments as a JSON object; use '{}' for tools without parameters",
     )
 
     return parser
@@ -423,13 +423,25 @@ def cmd_gateway_test(args: argparse.Namespace) -> int:
         print(f"mlink gateway test failed: {exc}")
         return 1
 
-    tool_names = [tool.get("name") for tool in tool_items]
+    tool_names = {tool.get("name") for tool in tool_items}
+    robot_motion_tools = {
+        "robot.move_forward",
+        "robot.move_backward",
+        "robot.turn_left",
+        "robot.turn_right",
+        "robot.dance",
+        "robot.stop_motion",
+    }
+    missing_robot_motion_tools = sorted(robot_motion_tools - tool_names)
     print(f"HTTP MCP endpoint reachable: http://{host}:{port}{path}")
     print(f"Tools discovered: {tool_count}")
-    if "robot.base_move" in tool_names:
-        print("Health: ready (robot.base_move available)")
+    if not missing_robot_motion_tools:
+        print("Health: ready (robot motion tools available)")
     elif tool_names:
-        print("Health: partial (MCP reachable, but robot.base_move not found)")
+        print(
+            "Health: partial (MCP reachable, missing robot motion tools: "
+            f"{', '.join(missing_robot_motion_tools)})"
+        )
     else:
         print("Health: partial (MCP reachable, but no tools registered yet)")
     return 0

@@ -27,10 +27,11 @@ pip install -e components/agent_tools/mlink_gateway
 ```bash
 mlink gateway start          # 默认 http://127.0.0.1:18765/mcp，日志 /tmp/mlink-gateway/gateway.log
 mlink gateway status | tools | test
-mlink gateway tools robot.base_move
+mlink gateway tools robot.move_forward
 mlink gateway tools --names-only
 mlink gateway tools --json
-mlink gateway call robot.base_move '{"direction":"forward"}'
+mlink gateway call robot.move_forward
+mlink gateway call robot.stop_motion
 mlink gateway stop           # 或 restart
 ```
 
@@ -59,12 +60,12 @@ python -m mlink.gateway.main
 1. 启动 gateway：`mlink gateway start`
 2. 设备示例：`mlink_device_test`（另开终端）
 3. 查看工具、描述和参数 schema：`mlink gateway tools`
-4. 查询单个工具详情：`mlink gateway tools robot.base_move`
+4. 查询单个工具详情：`mlink gateway tools robot.move_forward`
 5. 脚本读取机器可解析元数据：`mlink gateway tools --json`
-6. 按 `tools` 输出的 `inputSchema` 传参，直接调用设备工具：`mlink gateway call robot.base_move '{"direction":"forward"}'`
+6. 直接调用设备工具：`mlink gateway call robot.move_forward`、`mlink gateway call robot.stop_motion`
 7. MCP 客户端使用 HTTP 配置，例如：`components/agent_tools/mcp/examples/configs/mlink_http.json`（`http://127.0.0.1:18765/mcp`）
 
-`mlink gateway call` 是通用 MCP 调用命令，不绑定 `robot.base_move`。设备工具变更后，先用 `mlink gateway tools` 查询当前工具名、描述和 `inputSchema`，再把实际工具名与 JSON 参数传给 `call`。
+`mlink gateway call` 是通用 MCP 调用命令，不绑定某个固定工具。设备工具变更后，先用 `mlink gateway tools` 查询当前工具名、描述和 `inputSchema`，再把实际工具名与 JSON 参数传给 `call`。
 
 联调 **`voice_chat` / omni_agent**：先 **`mlink gateway start`**，再使用该 MCP 配置（可按需修改 JSON 里的 `url` / `model` 或与命令行 `--llm-url` 保持一致）：
 
