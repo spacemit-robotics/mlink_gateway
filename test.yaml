@@ -1,0 +1,67 @@
+module: components/agent_tools/mlink_gateway
+
+_python_env: &python_env
+  python: python3
+  install:
+    - "--prefer-binary -e ."
+
+tests:
+  - name: mlink-gateway-router-registry
+    description: Verifies gateway argument normalization, tool routing errors and device registry replacement.
+    category: functional
+    scopes: [pr, scheduled]
+    timeout_s: 60
+    workdir: module
+    python_env: *python_env
+    command: |
+      python tests/test_router_registry.py
+
+  - name: mlink-gateway-session-fake-device
+    description: Verifies session initialization, paged tool discovery, tool calls and cleanup with a fake device.
+    category: functional
+    scopes: [pr, scheduled]
+    timeout_s: 60
+    workdir: module
+    python_env: *python_env
+    command: |
+      python tests/test_session_fake_device.py
+
+  - name: mlink-gateway-jsonrpc-client
+    description: Verifies JSON-RPC request shape, response matching, ignored messages and timeout cleanup.
+    category: functional
+    scopes: [pr, scheduled]
+    timeout_s: 60
+    workdir: module
+    python_env: *python_env
+    command: |
+      python tests/test_jsonrpc_client.py
+
+  - name: mlink-gateway-snapshot-exporter
+    description: Verifies tools snapshot content and debounced file export without exact tool-count assumptions.
+    category: functional
+    scopes: [pr, scheduled]
+    timeout_s: 60
+    workdir: module
+    python_env: *python_env
+    command: |
+      python tests/test_snapshot_exporter.py
+
+  - name: mlink-gateway-transport-config
+    description: Verifies device transport configuration parsing and bounded start/close behavior.
+    category: functional
+    scopes: [pr, scheduled]
+    timeout_s: 60
+    workdir: module
+    python_env: *python_env
+    command: |
+      python tests/test_transport_config.py
+
+  - name: mlink-gateway-stress
+    description: Verifies gateway routing stability under concurrent tool calls.
+    category: stability
+    scopes: [scheduled]
+    timeout_s: 180
+    workdir: module
+    python_env: *python_env
+    command: |
+      python tests/test_gateway_stress.py
