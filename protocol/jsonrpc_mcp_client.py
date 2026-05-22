@@ -85,7 +85,12 @@ class MlinkMcpJsonRpcClient:
             "params": params or {},
         }
         self._send_text(json_tools.dumps(request))
-        return pending.wait()
+        try:
+            return pending.wait()
+        except Exception:
+            with self._lock:
+                self._pending.pop(req_id, None)
+            raise
 
     # High-level MCP helpers
 
@@ -113,5 +118,4 @@ class MlinkMcpJsonRpcClient:
 
 
 __all__ = ["MlinkMcpJsonRpcClient"]
-
 
